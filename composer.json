@@ -1,0 +1,27 @@
+{
+    "name": "aoloe/php-contact_form",
+    "type": "library",
+    "description": "simple engine for managing contact forms",
+    "keywords": [
+        "php",
+        "contact form"
+    ],
+    "homepage": "https://github.com/aoloe/php-contact_form",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ale Rimoldi",
+            "email": "ale@ideale.ch",
+            "homepage": "http://ideale.ch",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aoloe\\": "src"
+        }
+    }
+}
