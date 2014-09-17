@@ -7,6 +7,14 @@ class Contact_form {
     private $request_prefix = "contact_form_";
     public function set_request_prefix($prefix) {$this->request_prefix = $prefix;}
     public function get_request_prefix() {return $this->request_prefix;}
+    public function clear_field_request() {
+        $this->field_request = array();
+        $this->field_required = array();
+        $this->field_valid_email = array();
+    }
+    public function add_field_request($name, $default = null) {
+        $this->field_request[$name] = $default;
+    }
     private $field_request = array (
         'name' => null,
         'email' => null,
@@ -14,14 +22,23 @@ class Contact_form {
         'message' => null,
     );
 
+    public function set_field_required($name) {
+        $this->field_required[$name] = true;
+    }
     private $field_required = array (
         'message' => true,
     );
 
+    public function set_field_valid_email($name) {
+        $this->field_valid_email[$name] = true;
+    }
     private $field_valid_email = array (
         'email' => true,
     );
 
+    public function add_field_request_file($name) {
+        $this->field_request_file[] = $name;
+    }
     private $field_request_file = array();
 
     // error messages?
@@ -36,16 +53,22 @@ class Contact_form {
     private $subject_prefix = "[Contact Form]";
     public function set_subject_prefix($prefix) {$this->subject_prefix = $prefix;}
 
-    public function Contact_form() {
-    }
+    private $subject = null;
+    public function set_subject($subject) {$this->subject = $subject;}
+
+    private $content = null;
+    public function set_content($content) {$this->content = $content;}
 
     public function is_submitted() {
         return array_key_exists($this->request_prefix.'submit', $_REQUEST);
     }
 
+    /**
+     * TODO: check if this function is really useful / used
+     */
     public function add_field($name, $value = null) {
         if (isset($value)) {
-            $this->field_post[$name] = $value;
+            $this->field[$name] = $value;
         }
     }
 
@@ -66,16 +89,17 @@ class Contact_form {
             } elseif (isset($value)) {
                 $this->field[$key] = $value;
             }
-            foreach ($this->field_request_file as $item) {
-                $request_key = $this->request_prefix.$item;
-                if (array_key_exists($request_key, $_FILES) && !empty($_FILES[$request_key])) {
-                    // TODO: implement the files handling
-                    /*
-                    'name' => $_FILES[$this->post_prefix.'file']['name'],
-                    'type' =>  $_FILES[$this->post_prefix.'file']['type'],
-                    'location' => $_FILES[$this->post_prefix.'file']['tmp_name'],
-                    */
-                }
+        }
+        foreach ($this->field_request_file as $item) {
+            // debug('item', $item);
+            // debug('_FILES', $_FILES);
+            $request_key = $this->request_prefix.$item;
+            if (array_key_exists($request_key, $_FILES) && !empty($_FILES[$request_key])) {
+                $this->field[$item] = array (
+                    'name' => $_FILES[$this->request_prefix.$item]['name'],
+                    'type' =>  $_FILES[$this->request_prefix.$item]['type'],
+                    'location' => $_FILES[$this->request_prefix.$item]['tmp_name'],
+                );
             }
         }
         // debug('field', $this->field);
@@ -92,58 +116,88 @@ class Contact_form {
             $this->field_required[$key] = !empty($this->field[$key]);
             $result &= $this->field_required[$key];
         }
-        debug('field_required', $this->field_required);
+        // debug('field_required', $this->field_required);
         foreach ($this->field_valid_email as $key => $value) {
             $this->field_valid_email[$key] = (empty($this->field[$key]) || (strpos($this->field[$key], '@') !== false));
             $result &= $this->field_valid_email[$key];
         }
-        debug('field_valid_email', $this->field_valid_email);
-        return $result;
-    }
+    // debug('field_valid_email', $this->field_valid_email);
+    return $result;
+}
 
-    public function is_spam() {
-        $result = false;
-        // TODO: eventually add an honoey pot field that must be left empty...
-        $result &= strpos($this->field['subject'], "MIME-Version") !== false;
-        $result &= strpos($this->field['subject'], "Content-Type") !== false;
-        $result &= strpos($this->field['email'], "MIME-Version") !== false;
-        $result &= strpos($this->field['message'], "MIME-Version") !== false;
-        $result &= ($this->field['email'] == $this->field['subject']) && ($this->field['email'] == $this->field['message']);
-        return $result;
+public function is_spam() {
+    $result = false;
+    // TODO: eventually add an honoey pot field that must be left empty...
+    $result &= !array_key_exists('subject', $this->field_request) || (strpos($this->field['subject'], "MIME-Version") !== false);
+    $result &= !array_key_exists('subject', $this->field_request) || (strpos($this->field['subject'], "Content-Type") !== false);
+    $result &= !array_key_exists('email', $this->field_request) || (strpos($this->field['email'], "MIME-Version") !== false);
+    $result &= !array_key_exists('message', $this->field_request) || (strpos($this->field['message'], "MIME-Version") !== false);
+    if (array_key_exists('email', $this->field) && array_key_exists('subject', $this->field)) {
+        $result &= ($this->field['email'] == $this->field['subject']);
     }
+    if (array_key_exists('email', $this->field) && array_key_exists('message', $this->field)) {
+        $result &= ($this->field['email'] == $this->field['message']);
+    }
+    return $result;
+}
 
-    public function fill_message() {
-        $this->content = "";
-        foreach($this->field as $key => $value) {
-            if (!empty($value)) {
-                if ($key == 'file') {
-                    $value = $value['name'];
-                }
-                $this->content .= str_replace("_", " ", $key).": ".$value."\n";
+public function fill_message() {
+    $this->content = "";
+    foreach($this->field as $key => $value) {
+        if (!empty($value)) {
+            if ($key == 'file') {
+                $value = $value['name'];
+            }
+            $this->content .= str_replace("_", " ", $key).": ".$value."\n";
+        }
+    }
+}
+
+function send($server = "") {
+    $result = true;
+    // debug('field', $this->field);
+    if (empty($this->field_request_file)) {
+        $result = mail(
+            $this->mail_to,
+            $this->subject_prefix.$this->field['subject'],
+            $this->field['message'],
+            "From: ".$this->field['email']
+        );
+    } else {
+        // debug('field_request_file', $this->field_request_file);
+        $mail = new \PHPMailer();
+        foreach ($this->field_request_file as $item) {
+            // debug('field[key]', $this->field[$item]);
+            if (!empty($this->field[$item])) {
+                $mail->AddAttachment($this->field[$item]['location'], $this->field[$item]['name'], 'base64', $this->field[$item]['type']);
             }
         }
-    }
-
-    function send($server = "") {
-        $result = true;
-        if (empty($this->field['file'])) {
-            $result = mail(
-                $this->mail_to,
-                $this->subject_prefix.$this->field['subject'],
-                $this->field['message'],
-                "From: ".$this->field['email']
-            );
+        $mail->addAddress($this->mail_to);
+        $mail->setFrom(array_key_exists('email', $this->field) ? $this->field['email'] : $this->mail_from);
+        $mail->subject = $this->subject_prefix.' '.(isset($this->subject) ? $this->subject : '');
+        if (isset($this->content)) {
+            $mail->Body = $this->content;
         } else {
-            include_once(LIB_PATH.'/htmlMimeMail.php');
-            $mail = new htmlMimeMail();
-            $attachment = $mail->getFile($this->field['file']['location']);
-            $mail->addAttachment($attachment, $this->field['file']['name'], $this->field['file']['type']);
-            $mail->setFrom($this->field['email']);
-            $mail->setSubject($this->subject_prefix.$this->field['subject']);
-            $mail->setText($this->content);
-            $mail->setHeader('X-Mailer', 'HTML Mime mail class (http://www.phpguru.org)');
-            $result = $mail->send(array($this->target));
+            $body = array();
+            foreach ($this->field_request as $key => $value) {
+                $body[] = $key.': '.$this->field[$key];
+            }
+            $mail->Body = implode("\n\n", $body);
         }
-        return $result;
+        // debug('body', $mail->Body);
+        $result = $mail->send();
+        // debug('result', $result);
+        // debug('ErrorInfo', $mail->ErrorInfo);
+        /*
+        $attachment = $mail->getFile($this->field['file']['location']);
+        $mail->addAttachment($attachment, $this->field['file']['name'], $this->field['file']['type']);
+        $mail->setFrom($this->field['email']);
+        $mail->setSubject($this->subject_prefix.$this->field['subject']);
+        $mail->setText($this->content);
+        $mail->setHeader('X-Mailer', 'HTML Mime mail class (http://www.phpguru.org)');
+        $result = $mail->send(array($this->target));
+        */
     }
+    return $result;
+}
 }
