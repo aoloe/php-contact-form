@@ -1,12 +1,12 @@
 {
-    "name": "aoloe/php-contact_form",
+    "name": "aoloe/php-contact-form",
     "type": "library",
     "description": "simple engine for managing contact forms",
     "keywords": [
         "php",
         "contact form"
     ],
-    "homepage": "https://github.com/aoloe/php-contact_form",
+    "homepage": "https://github.com/aoloe/php-contact-form",
     "license": "MIT",
     "authors": [
         {
